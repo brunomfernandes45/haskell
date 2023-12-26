@@ -1,23 +1,34 @@
--- PFL 2023/24 - Haskell practical assignment quickstart
--- Updated on 15/12/2023
+import Data.List
 
--- Part 1
-
--- Do not modify our definition of Inst and Code
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
   Branch Code Code | Loop Code Code
   deriving Show
+
 type Code = [Inst]
+data StackValue = IntValue Integer | BoolValue Bool deriving Show
+type Stack = [StackValue]
+type Store = [(String, StackValue)]
+type State = (Code, Stack, Store)
 
--- createEmptyStack :: Stack
-createEmptyStack = undefined -- TODO, Uncomment the function signature after defining Stack
+createEmptyStack :: Stack
+createEmptyStack = []
 
--- stack2Str :: Stack -> String
-stack2Str = undefined -- TODO, Uncomment all the other function type declarations as you implement them
+stack2Str :: Stack -> String
+stack2Str stack = intercalate "," (map stackValueToStr (reverse stack))
 
--- createEmptyState :: State
-createEmptyState = undefined -- TODO, Uncomment the function signature after defining State
+stackValueToStr :: StackValue -> String
+stackValueToStr (IntValue n) = show n
+stackValueToStr (BoolValue b) = show b
+
+createEmptyStore :: Store
+createEmptyStore = []
+
+createEmptyCode :: Code
+createEmptyCode = []
+
+createEmptyState :: State
+createEmptyState = (createEmptyCode, createEmptyStack, createEmptyStore)
 
 -- state2Str :: State -> String
 state2Str = undefined -- TODO
@@ -25,10 +36,18 @@ state2Str = undefined -- TODO
 -- run :: (Code, Stack, State) -> (Code, Stack, State)
 run = undefined -- TODO
 
+testStack :: Stack
+testStack = [IntValue 42, BoolValue True, BoolValue False]
+
+main :: IO ()
+main = do
+  putStrLn $ stack2Str testStack
+
+
 -- To help you test your assembler
-testAssembler :: Code -> (String, String)
-testAssembler code = (stack2Str stack, state2Str state)
-  where (_,stack,state) = run(code, createEmptyStack, createEmptyState)
+-- testAssembler :: Code -> (String, String)
+-- testAssembler code = (stack2Str stack, state2Str state)
+  -- where (_,stack,state) = run (code, createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
@@ -64,9 +83,9 @@ compile = undefined -- TODO
 parse = undefined -- TODO
 
 -- To help you test your parser
-testParser :: String -> (String, String)
-testParser programCode = (stack2Str stack, store2Str store)
-  where (_,stack,store) = run(compile (parse programCode), createEmptyStack, createEmptyStore)
+-- testParser :: String -> (String, String)
+-- testParser programCode = (stack2Str stack, store2Str store)
+  -- where (_,stack,store) = run (compile (parse programCode), createEmptyStack, createEmptyStore)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
