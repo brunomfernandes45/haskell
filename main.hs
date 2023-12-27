@@ -1,4 +1,5 @@
 import Data.List
+import Distribution.Simple.Test (test)
 
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
@@ -6,10 +7,76 @@ data Inst =
   deriving Show
 
 type Code = [Inst]
-data StackValue = IntValue Integer | BoolValue Bool deriving Show
+
+data StackValue =
+  IntValue Integer | BoolValue Bool
+  deriving Show
+
 type Stack = [StackValue]
 type Store = [(String, StackValue)]
 type State = (Code, Stack, Store)
+
+-- Instructions
+push :: Integer -> Stack -> Stack
+push n stack = IntValue n:stack
+
+add :: Stack -> Stack
+add (IntValue n1:IntValue n2:stack) = IntValue (n1 + n2):stack
+add _ = error "Run-time error"
+
+mult :: Stack -> Stack
+mult (IntValue n1:IntValue n2:stack) = IntValue (n1 * n2):stack
+mult _ = error "Run-time error"
+
+sub :: Stack -> Stack
+sub (IntValue n1:IntValue n2:stack) = IntValue (n1 - n2):stack
+sub _ = error "Run-time error"
+
+tru :: Stack -> Stack
+tru stack = BoolValue True:stack
+
+fals :: Stack -> Stack
+fals stack = BoolValue False:stack
+
+-- works for both integers and booleans
+equ :: Stack -> Stack
+equ (IntValue n1:IntValue n2:stack) = BoolValue (n1 == n2):stack
+equ (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 == b2):stack
+equ (IntValue n1:BoolValue b2:stack) = BoolValue False:stack
+equ (BoolValue b1:IntValue n2:stack) = BoolValue False:stack
+equ _ = error "Run-time error"
+
+-- only works for integers
+le :: Stack -> Stack
+le (IntValue n1:IntValue n2:stack) = BoolValue (n1 <= n2):stack
+le _ = error "Run-time error"
+
+and :: Stack -> Stack
+and (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 && b2):stack
+and _ = error "Run-time error"
+
+neg :: Stack -> Stack
+neg (BoolValue b:stack) = BoolValue (not b):stack
+neg _ = error "Run-time error"
+
+fetch :: String -> Stack -> Store -> (Stack, Store)
+fetch var stack store = (value:stack, store)
+  where value = case lookup var store of
+                  Just value -> value
+                  Nothing -> error "Run-time error"
+
+-- Function to print stack before and after pushing
+printStackBeforeAndAfter :: Stack -> IO ()
+printStackBeforeAndAfter stack = do
+  putStrLn $ "Before Equ: " ++ stack2Str stack
+  let newStack = le stack
+  putStrLn $ "After Equ: " ++ stack2Str newStack
+
+-- Example usage:
+main :: IO ()
+main = do
+  let initialStack = [IntValue 41, IntValue 42]
+  printStackBeforeAndAfter initialStack
 
 createEmptyStack :: Stack
 createEmptyStack = []
@@ -35,14 +102,6 @@ state2Str = undefined -- TODO
 
 -- run :: (Code, Stack, State) -> (Code, Stack, State)
 run = undefined -- TODO
-
-testStack :: Stack
-testStack = [IntValue 42, BoolValue True, BoolValue False]
-
-main :: IO ()
-main = do
-  putStrLn $ stack2Str testStack
-
 
 -- To help you test your assembler
 -- testAssembler :: Code -> (String, String)
