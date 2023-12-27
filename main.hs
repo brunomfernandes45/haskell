@@ -1,5 +1,4 @@
 import Data.List
-import Distribution.Simple.Test (test)
 
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
