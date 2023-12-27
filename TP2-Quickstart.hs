@@ -43,6 +43,26 @@ main :: IO ()
 main = do
   putStrLn $ stack2Str testStack
 
+add :: StackValue -> StackValue -> StackValue
+add (IntValue x) (IntValue y) = IntValue (x + y)
+add _ _ = error "Run-time error"
+
+mult :: StackValue -> StackValue -> StackValue
+mult (IntValue x) (IntValue y) = IntValue (x * y)
+mult _ _ = error "Run-time error"
+
+sub :: StackValue -> StackValue -> StackValue
+sub (IntValue x) (IntValue y) = IntValue (x - y)
+sub _ _ = error "Run-time error"
+
+eq :: StackValue -> StackValue -> StackValue
+eq (IntValue x) (IntValue y) = BoolValue (x == y)
+eq (BoolValue x) (BoolValue y) = BoolValue (x == y)
+eq _ _ = error "Run-time error"
+
+le :: StackValue -> StackValue -> StackValue
+le (IntValue x) (IntValue y) = BoolValue (x <= y)
+le _ _ = error "Run-time error"
 
 -- To help you test your assembler
 -- testAssembler :: Code -> (String, String)
