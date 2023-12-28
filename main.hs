@@ -55,9 +55,9 @@ le (IntValue n1:IntValue n2:stack) = BoolValue (n1 <= n2):stack
 le _ = error "Run-time error"
 
 -- Pops two booleans from the stack and pushes True if both are True, False otherwise
-and :: Stack -> Stack
-and (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 && b2):stack
-and _ = error "Run-time error"
+and' :: Stack -> Stack
+and' (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 && b2):stack
+and' _ = error "Run-time error"
 
 -- Pops a boolean from the stack and pushes its negation
 neg :: Stack -> Stack
@@ -70,6 +70,21 @@ fetch var stack store = (value:stack, store)
   where value = case lookup var store of
                   Just value -> value
                   Nothing -> error "Run-time error"
+
+-- Will change the flow of control:  if the top of the stack is the
+--value tt (that is, some boolean expression has been evaluated to true), then the
+--stack is popped and c1 is to be executed next. Otherwise, if the top element of the
+--stack is ff, then it will be popped and c2 will be executed next.
+branch :: Code -> Code -> Stack -> State -> (Code, Stack, State)
+branch c1 c2 (BoolValue True:stack) store = (c1, stack, store)
+branch c1 c2 (BoolValue False:stack) store = (c2, stack, store)
+branch _ _ _ _ = error "Run-time error"
+
+-- Dummy instruction that returns the input stack and store
+noop :: Stack -> State -> (Stack, State)
+noop stack store = (stack, store)
+
+
 
 -- Creates an empty stack
 createEmptyStack :: Stack
@@ -92,14 +107,42 @@ createEmptyState = []
 state2Str :: State -> String
 state2Str = intercalate "," . map (\(var, value) -> var ++ "=" ++ stackValueToStr value)
 
+
+exec ::Inst -> Stack -> State -> (Stack, State)
+exec (Push n) stack store = (push n stack, store)
+exec Add stack store = (add stack, store)
+exec Mult stack store = (mult stack, store)
+exec Sub stack store = (sub stack, store)
+exec Tru stack store = (tru stack, store)
+exec Fals stack store = (fals stack, store)
+exec Equ stack store = (equ stack, store)
+exec Le stack store = (le stack, store)
+exec And stack store = (and' stack, store)
+exec Neg stack store = (neg stack, store)
+exec (Fetch var) stack store = fetch var stack store
+exec (Store var) (value:stack) store = (stack, (var, value):store)
+exec Noop stack store = noop stack store
+--exec (Branch c1 c2) stack store = (c, stack, store)
+  --where (c, _, _) = branch (c1 c2) stack store
+--exec (Loop c1 c2) stack store = (c, stack, store)
+ -- where (c, _, _) = branch (c1 ++ [Loop c1 c2]) [Noop] stack store
+
 -- Runs the given code with the given stack and state and returns the resulting stack and state
+--given a list of instructions (type defined as Code, i.e. type Code = [Inst]), a stack (type defined as
+--Stack) and that is initially empty, and a storage (type defined as State), runs the
+--list of instructions returning as ouput an empty code list, a stack and the output
+--values in the storage.
 run :: (Code, Stack, State) -> (Code, Stack, State)
-run = undefined -- TODO
+run ( [], stack , store ) = ( [] , stack , store )
+run (code , stack , state) = run ( tail code , stack' , state' )
+  where (stack', state') = exec ( head code ) stack state
+
+
 
 -- To help you test your assembler
--- testAssembler :: Code -> (String, String)
--- testAssembler code = (stack2Str stack, state2Str state)
-  -- where (_,stack,state) = run (code, createEmptyStack, createEmptyState)
+testAssembler :: Code -> (String, String)
+testAssembler code = (stack2Str stack, state2Str state)
+  where (_,stack,state) = run (code, createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
