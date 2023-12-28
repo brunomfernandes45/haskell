@@ -46,8 +46,6 @@ fals stack = BoolValue False:stack
 equ :: Stack -> Stack
 equ (IntValue n1:IntValue n2:stack) = BoolValue (n1 == n2):stack
 equ (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 == b2):stack
-equ (IntValue n1:BoolValue b2:stack) = BoolValue False:stack
-equ (BoolValue b1:IntValue n2:stack) = BoolValue False:stack
 equ _ = error "Run-time error"
 
 -- Pops two integers from the stack and pushes True if the first is less than or equal to the second, False otherwise (only works for integers)
@@ -85,17 +83,17 @@ updateState var value ((existingVar, existingValue):rest)
   | otherwise = (existingVar, existingValue) : updateState var value rest
 
 -- Will change the flow of control:  if the top of the stack is the
---value tt (that is, some boolean expression has been evaluated to true), then the
---stack is popped and c1 is to be executed next. Otherwise, if the top element of the
---stack is ff, then it will be popped and c2 will be executed next.
-branch :: Code -> Code -> Stack -> State -> (Code, Stack, State)
-branch c1 c2 (BoolValue True:stack) store = (c1, stack, store)
-branch c1 c2 (BoolValue False:stack) store = (c2, stack, store)
-branch _ _ _ _ = error "Run-time error"
+-- value tt (that is, some boolean expression has been evaluated to true), then the
+-- stack is popped and c1 is to be executed next. Otherwise, if the top element of the
+-- stack is ff, then it will be popped and c2 will be executed next.
+branch :: Code -> Code -> Stack -> Code
+branch c1 c2 (BoolValue True:stack) = c1
+branch c1 c2 (BoolValue False:stack) = c2
+branch c1 c2 stack = error $ "Run-time error with c1: " ++ show c1 ++ " and c2: " ++ show c2 ++ " and stack: " ++ stack2Str stack
 
 -- Dummy instruction that returns the input stack and store
 noop :: Stack -> State -> (Stack, State)
-noop stack store = (stack, store)
+noop stack state = (stack, state)
 
 -- Creates an empty stack
 createEmptyStack :: Stack
@@ -120,24 +118,37 @@ state2Str = intercalate "," . map (\(var, value) -> var ++ "=" ++ stackValueToSt
   where
     sortByName = sortBy (comparing fst)
 
-exec ::Inst -> Stack -> State -> (Stack, State)
-exec (Push n) stack state = (push n stack, state)
-exec Add stack state = (add stack, state)
-exec Mult stack state = (mult stack, state)
-exec Sub stack state = (sub stack, state)
-exec Tru stack state = (tru stack, state)
-exec Fals stack state = (fals stack, state)
-exec Equ stack state = (equ stack, state)
-exec Le stack state = (le stack, state)
-exec And stack state = (and' stack, state)
-exec Neg stack state = (neg stack, state)
-exec (Fetch var) stack state = fetch var stack state
-exec (Store var) stack state = store var stack state
-exec Noop stack state = noop stack state
--- exec (Branch c1 c2) stack state = (c, stack, state)
---  where (c, _, _) = branch c1 c2
---exec (Loop c1 c2) stack state = (c, stack, state)
---  where (c, _, _) = branch (c1 ++ [Loop c1 c2]) [Noop]
+exec :: Code -> Stack -> State -> (Code, Stack, State)
+exec ((Push n):code) stack state = (code, stack', state)
+  where stack' = push n stack
+exec ((Add):code) stack state = (code, stack', state)
+  where stack' = add stack
+exec ((Mult):code) stack state = (code, stack', state)
+  where stack' = mult stack
+exec ((Sub):code) stack state = (code, stack', state)
+  where stack' = sub stack
+exec ((Tru):code) stack state = (code, stack', state)
+  where stack' = tru stack
+exec ((Fals):code) stack state = (code, stack', state)
+  where stack' = fals stack
+exec ((Equ):code) stack state = (code, stack', state)
+  where stack' = equ stack
+exec ((Le):code) stack state = (code, stack', state)
+  where stack' = le stack
+exec ((And):code) stack state = (code, stack', state)
+  where stack' = and' stack
+exec ((Neg):code) stack state = (code, stack', state)
+  where stack' = neg stack
+exec ((Fetch var):code) stack state = (code, stack', state')
+  where (stack', state') = fetch var stack state
+exec ((Store var):code) stack state = (code, stack', state')
+  where (stack', state') = store var stack state
+exec ((Noop):code) stack state = (code, stack', state')
+  where (stack', state') = noop stack state
+exec ((Branch c1 c2):code) stack state = (c, stack', state')
+  where (c, stack', state') = ((branch c1 c2 stack), (tail stack), state)
+exec ((Loop c1 c2):code) stack state = (c, stack', state')
+  where (c, stack', state') = (c1 ++ [(Branch (c2 ++ [Loop c1 c2]) [Noop])], stack, state)
 
 -- Runs the given code with the given stack and state and returns the resulting stack and state
 -- given a list of instructions (type defined as Code, i.e. type Code = [Inst]), a stack (type defined as
@@ -145,14 +156,14 @@ exec Noop stack state = noop stack state
 -- list of instructions returning as ouput an empty code list, a stack and the output
 -- values in the storage.
 run :: (Code, Stack, State) -> (Code, Stack, State)
-run ( [], stack , store ) = ( [] , stack , store )
-run (code , stack , state) = run ( tail code , stack' , state' )
-  where (stack', state') = exec ( head code ) stack state
+run ([], stack, state) = ([], stack, state)
+run (code, stack, state) = run (code', stack', state')
+  where (code', stack', state') = exec code stack state
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
-  where (_,stack,state) = run (code, createEmptyStack, createEmptyState)
+  where (_, stack, state) = run (code, createEmptyStack, createEmptyState)
 
 -- Examples:
 -- DONE -- testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
@@ -163,7 +174,7 @@ testAssembler code = (stack2Str stack, state2Str state)
 -- DONE -- testAssembler [Push (-20),Tru,Tru,Neg,Equ] == ("False,-20","")
 -- DONE -- testAssembler [Push (-20),Push (-21), Le] == ("True","")
 -- DONE -- testAssembler [Push 5,Store "x",Push 1,Fetch "x",Sub,Store "x"] == ("","x=4")
--- testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
+-- DONE -- testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
 -- If you test:
 -- DONE -- testAssembler [Push 1,Push 2,And]
 -- You should get an exception with the string: "Run-time error"
@@ -195,7 +206,7 @@ parse = undefined -- TODO
 -- To help you test your parser
 -- testParser :: String -> (String, String)
 -- testParser programCode = (stack2Str stack, store2Str store)
-  -- where (_,stack,store) = run (compile (parse programCode), createEmptyStack, createEmptyStore)
+  -- where (_, stack, store) = run (compile (parse programCode), createEmptyStack, createEmptyStore)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
