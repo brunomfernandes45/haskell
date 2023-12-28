@@ -118,6 +118,7 @@ state2Str = intercalate "," . map (\(var, value) -> var ++ "=" ++ stackValueToSt
   where
     sortByName = sortBy (comparing fst)
 
+-- Executes the first instruction of the code list with the given stack and state and returns the resulting code, stack and state
 exec :: Code -> Stack -> State -> (Code, Stack, State)
 exec ((Push n):code) stack state = (code, stack', state)
   where stack' = push n stack
@@ -146,9 +147,9 @@ exec ((Store var):code) stack state = (code, stack', state')
 exec ((Noop):code) stack state = (code, stack', state')
   where (stack', state') = noop stack state
 exec ((Branch c1 c2):code) stack state = (c, stack', state')
-  where (c, stack', state') = ((branch c1 c2 stack), (tail stack), state)
+  where (c, stack', state') = ((branch c1 c2 stack) ++ code, (tail stack), state)
 exec ((Loop c1 c2):code) stack state = (c, stack', state')
-  where (c, stack', state') = (c1 ++ [(Branch (c2 ++ [Loop c1 c2]) [Noop])], stack, state)
+  where (c, stack', state') = ((c1 ++ [(Branch (c2 ++ [Loop c1 c2]) [Noop])]) ++ code, stack, state)
 
 -- Runs the given code with the given stack and state and returns the resulting stack and state
 -- given a list of instructions (type defined as Code, i.e. type Code = [Inst]), a stack (type defined as
