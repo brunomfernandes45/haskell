@@ -10,7 +10,7 @@ data Inst =
 type Code = [Inst]
 
 data StackValue =
-  IntValue Integer | BoolValue Bool
+  IntValue Integer | BoolValue String
   deriving Show
 
 type Stack = [StackValue]
@@ -37,11 +37,11 @@ sub _ = error "Run-time error"
 
 -- Pushes the boolean value True onto the stack
 tru :: Stack -> Stack
-tru stack = BoolValue True:stack
+tru stack = BoolValue "tt":stack
 
 -- Pushes the boolean value False onto the stack
 fals :: Stack -> Stack
-fals stack = BoolValue False:stack
+fals stack = BoolValue "ff":stack
 
 -- Pops two values from the stack and pushes True if they are equal, False otherwise (works for both integers and booleans)
 equ :: Stack -> Stack
@@ -56,12 +56,16 @@ le _ = error "Run-time error"
 
 -- Pops two booleans from the stack and pushes True if both are True, False otherwise
 and' :: Stack -> Stack
-and' (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 && b2):stack
+and' (BoolValue "tt":BoolValue "tt":stack) = BoolValue "tt":stack
+and' (BoolValue "tt":BoolValue "ff":stack) = BoolValue "ff":stack
+and' (BoolValue "ff":BoolValue "tt":stack) = BoolValue "ff":stack
+and' (BoolValue "ff":BoolValue "ff":stack) = BoolValue "ff":stack
 and' _ = error "Run-time error"
 
 -- Pops a boolean from the stack and pushes its negation
 neg :: Stack -> Stack
-neg (BoolValue b:stack) = BoolValue (not b):stack
+neg (BoolValue "tt":stack) = BoolValue "ff":stack
+neg (BoolValue "ff":stack) = BoolValue "tt":stack
 neg _ = error "Run-time error"
 
 -- Pushes the value of the variable with the given name onto the stack
@@ -88,8 +92,8 @@ updateState var value ((existingVar, existingValue):rest)
 -- stack is popped and c1 is to be executed next. Otherwise, if the top element of the
 -- stack is ff, then it will be popped and c2 will be executed next.
 branch :: Code -> Code -> Stack -> Code
-branch c1 c2 (BoolValue True:stack) = c1
-branch c1 c2 (BoolValue False:stack) = c2
+branch c1 c2 (BoolValue "tt":stack) = c1
+branch c1 c2 (BoolValue "ff":stack) = c2
 branch c1 c2 stack = error $ "Run-time error with c1: " ++ show c1 ++ " and c2: " ++ show c2 ++ " and stack: " ++ stack2Str stack
 
 -- Dummy instruction that returns the input stack and store
