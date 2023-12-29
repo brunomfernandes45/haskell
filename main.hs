@@ -1,5 +1,6 @@
 import Data.List
 import Data.Ord (comparing)
+import Data.Char 
 
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
@@ -185,31 +186,73 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- Part 2
 
-data Aexp = 
-  Num Integer | Var String | Add Aexp Aexp | Sub Aexp Aexp | Mult Aexp Aexp
+-- TODO: Define the types Aexp, Bexp, Stm and Program
+data Aexp = Num Integer | Var String | Add' Aexp Aexp | Sub' Aexp Aexp | Mult' Aexp Aexp deriving Show
+
+data Bexp = 
+  Tru' | Fals' | Neg' Bexp | And' Bexp Bexp | Le' Aexp Aexp | Equi Aexp Aexp | Equb Bexp Bexp
   deriving Show
 
-data Bexp =
-  Tru | Fals | Equ Bexp Bexp | Equ Aexp Aexp | Le Aexp Aexp | And Bexp Bexp | Neg Bexp
+data Stm =
+  Assign String Aexp | If Bexp Program Program | While Bexp Program 
   deriving Show
-
-data Stm = 
-  Assign String Aexp | If Bexp Program Program | While Bexp Program
-  deriving Show
-
+  
 type Program = [Stm]
 
--- compA :: Aexp -> Code
-compA = undefined -- TODO
+compA :: Aexp -> Code
+compA (Num n) = [Push n]
+compA (Var var) = [Fetch var]
+compA (Add' a1 a2) = compA a2 ++ compA a1 ++ [Add]
+compA (Sub' a1 a2) = compA a2 ++ compA a1 ++ [Sub]
+compA (Mult' a1 a2) = compA a2 ++ compA a1 ++ [Mult]
 
--- compB :: Bexp -> Code
-compB = undefined -- TODO
+compB :: Bexp -> Code
+compB Tru' = [Tru]
+compB Fals' = [Fals]
+compB (Neg' b) = compB b ++ [Neg]
+compB (And' b1 b2) = compB b2 ++ compB b1 ++ [And]
+compB (Le' a1 a2) = compA a2 ++ compA a1 ++ [Le]
+compB (Equi a1 a2) = compA a2 ++ compA a1 ++ [Equ]
+compB (Equb b1 b2) = compB b2 ++ compB b1 ++ [Equ]
 
--- compile :: Program -> Code
-compile = undefined -- TODO
+compile :: Program -> Code
+compile [] = []
+compile (Assign var a:rest) = compA a ++ [Store var] ++ compile rest
+compile (If b p1 p2:rest) = compB b ++ [Branch (compile p1) (compile p2)] ++ compile rest
+compile (While b p:rest) = [Loop (compB b) (compile p)] ++ compile rest
 
--- parse :: String -> Program
-parse = undefined -- TODO
+lexer :: String -> [String]
+lexer [] = []
+lexer input@(c:cs)
+  | "<=" `isPrefixOf` input = "<=" : lexer (drop 2 input)
+  | ":=" `isPrefixOf` input = ":=" : lexer (drop 2 input)
+  | "==" `isPrefixOf` input = "==" : lexer (drop 2 input)
+  | "while" `isPrefixOf` input = "while" : lexer (drop 5 input)
+  | "do" `isPrefixOf` input = "do" : lexer (drop 2 input)
+  | "==" `isPrefixOf` input = "==" : lexer (drop 2 input)
+  | "True" `isPrefixOf` input = "True" : lexer (drop 4 input)
+  | "False" `isPrefixOf` input = "False" : lexer (drop 5 input)
+  | "not" `isPrefixOf` input = "not" : lexer (drop 3 input)
+  | "and" `isPrefixOf` input = "and" : lexer (drop 3 input)
+  | "if" `isPrefixOf` input = "if" : lexer (drop 2 input)
+  | "then" `isPrefixOf` input = "then" : lexer (drop 4 input)
+  | "else" `isPrefixOf` input = "else" : lexer (drop 4 input)
+  | isDigit c = (takeWhile isDigit input) : lexer (dropWhile isDigit input)
+  | isLower c = (takeWhile isAlpha input) : lexer (dropWhile isAlpha input)
+  | " " `isPrefixOf` input = lexer (drop 1 input)
+  | "\n" `isPrefixOf` input = lexer (drop 1 input)
+  | "=" `isPrefixOf` input = "=" : lexer (drop 1 input)
+  | "+" `isPrefixOf` input = "+" : lexer (drop 1 input)
+  | "-" `isPrefixOf` input = "-" : lexer (drop 1 input)
+  | "*" `isPrefixOf` input = "*" : lexer (drop 1 input)
+  | "(" `isPrefixOf` input = "(" : lexer (drop 1 input)
+  | ")" `isPrefixOf` input = ")" : lexer (drop 1 input)
+  | ";" `isPrefixOf` input = ";" : lexer (drop 1 input)
+  | otherwise = error $ "Cannot parse: " ++ input
+
+
+--parse :: String -> Program
+parse =  undefined-- TODO
 
 -- To help you test your parser
 -- testParser :: String -> (String, String)
