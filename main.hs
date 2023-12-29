@@ -347,13 +347,53 @@ parseAexp tokens
           Nothing -> Nothing
       result -> result
 
--- parse :: String -> Program
-parse = undefined-- TODO
+parseBool :: [Token] -> Maybe (Bexp, [Token])
+parseBool (TruToken : restTokens) = Just (Tru', restTokens)
+parseBool (FalsToken : restTokens) = Just (Fals', restTokens)
+parseBool _ = Nothing
+
+parseNeg :: [Token] -> Maybe (Bexp, [Token])
+parseNeg (NegToken : restTokens) 
+  = case parseBoolOrPar restTokens of
+    Just (bexp, restTokens') -> Just (Neg' bexp, restTokens')
+    Nothing -> Nothing
+
+parsePar :: [Token] -> Maybe (Bexp, [Token])
+parsePar (OpenToken : restTokens) 
+  = case parseBexp restTokens of
+      Just (bexp, CloseToken : restTokens') -> Just (bexp, restTokens')
+      Just _ -> Nothing
+      Nothing -> Nothing
+
+parseBoolOrPar :: [Token] -> Maybe (Bexp, [Token])
+parseBoolOrPar = parseNeg
+
+parseBexp :: [Token] -> Maybe (Bexp, [Token])
+parseBexp tokens 
+  = case parseBoolOrPar tokens of
+    Just (bexp1, AndToken : restTokens) -> 
+      case parseBoolOrPar restTokens of
+        Just (bexp2, restTokens') -> Just (And' bexp1 bexp2, restTokens')
+        Nothing -> Nothing
+    Just (bexp1, EqubToken : restTokens) -> 
+      case parseBexp restTokens of
+        Just (bexp2, restTokens') -> Just (Equb bexp1 bexp2, restTokens')
+        Nothing -> Nothing
+    result -> result
+
+parse :: String -> Program
+parse = parseProgram . lexer
+
+parseProgram :: [Token] -> Program
+parseProgram [] = []
+parseProgram tokens = case parseAssign tokens of
+  Just (stm, restTokens) -> stm : parseProgram restTokens
+  Nothing -> []
 
 -- To help you test your parser
--- testParser :: String -> (String, String)
--- testParser programCode = (stack2Str stack, state2Str state)
-  -- where (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
+testParser :: String -> (String, String)
+testParser programCode = (stack2Str stack, state2Str state)
+  where (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
 
 testCompiler :: Program -> (String, String)
 testCompiler programCode = (stack2Str stack, state2Str state)
@@ -363,10 +403,10 @@ testCompiler programCode = (stack2Str stack, state2Str state)
 -- testCompiler [If (And' (Neg' (Tru')) (Equb (Le' (Num 2) (Num 5)) (Equi (Num 3) (Num 4)))) [Assign "x" (Num 1)] [Assign "y" (Num 2)]]
 -- testCompiler [Assign "i" (Num 10), Assign "fact" (Num 1), While (Neg' (Equi (Var "i") (Num 1))) [Assign "fact" (Mult' (Var "fact") (Var "i")), Assign "i" (Sub' (Var "i") (Num 1))]]
 -- Examples:
--- testParser "x := 5; x := x - 1;" == ("","x=4")
+-- DONE -- testParser "x := 5; x := x - 1;" == ("","x=4")
 -- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)" == ("","x=1")
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
--- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
+-- DONE -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
 -- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
