@@ -65,8 +65,8 @@ neg _ = error "Run-time error"
 
 -- Pushes the value of the variable with the given name onto the stack
 fetch :: String -> Stack -> State -> (Stack, State)
-fetch var stack store = (value:stack, store)
-  where value = case lookup var store of
+fetch var stack state = (value:stack, state)
+  where value = case lookup var state of
                   Just value -> value
                   Nothing -> error "Run-time error"
 
@@ -91,7 +91,7 @@ branch c1 c2 (BoolValue True:stack) = c1
 branch c1 c2 (BoolValue False:stack) = c2
 branch c1 c2 stack = error $ "Run-time error with c1: " ++ show c1 ++ " and c2: " ++ show c2 ++ " and stack: " ++ stack2Str stack
 
--- Dummy instruction that returns the input stack and store
+-- Dummy instruction that returns the input stack and state
 noop :: Stack -> State -> (Stack, State)
 noop stack state = (stack, state)
 
@@ -185,12 +185,19 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- Part 2
 
--- TODO: Define the types Aexp, Bexp, Stm and Program
+data Aexp = 
+  Num Integer | Var String | Add Aexp Aexp | Sub Aexp Aexp | Mult Aexp Aexp
+  deriving Show
 
--- type Aexp = undefined
--- type Bexp = undefined
--- type Stm = undefined
--- type Program = undefined
+data Bexp =
+  Tru | Fals | Equ Bexp Bexp | Equ Aexp Aexp | Le Aexp Aexp | And Bexp Bexp | Neg Bexp
+  deriving Show
+
+data Stm = 
+  Assign String Aexp | If Bexp Program Program | While Bexp Program
+  deriving Show
+
+type Program = [Stm]
 
 -- compA :: Aexp -> Code
 compA = undefined -- TODO
@@ -206,8 +213,8 @@ parse = undefined -- TODO
 
 -- To help you test your parser
 -- testParser :: String -> (String, String)
--- testParser programCode = (stack2Str stack, store2Str store)
-  -- where (_, stack, store) = run (compile (parse programCode), createEmptyStack, createEmptyStore)
+-- testParser programCode = (stack2Str stack, state2Str state)
+  -- where (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
