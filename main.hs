@@ -43,15 +43,19 @@ tru stack = BoolValue "tt":stack
 fals :: Stack -> Stack
 fals stack = BoolValue "ff":stack
 
+boolToStr :: Bool -> String
+boolToStr True = "tt"
+boolToStr False = "ff"
+
 -- Pops two values from the stack and pushes True if they are equal, False otherwise (works for both integers and booleans)
 equ :: Stack -> Stack
-equ (IntValue n1:IntValue n2:stack) = BoolValue (n1 == n2):stack
-equ (BoolValue b1:BoolValue b2:stack) = BoolValue (b1 == b2):stack
+equ (IntValue n1:IntValue n2:stack) = BoolValue (boolToStr (n1 == n2)):stack
+equ (BoolValue b1:BoolValue b2:stack) = BoolValue (boolToStr (b1 == b2)):stack
 equ _ = error "Run-time error"
 
 -- Pops two integers from the stack and pushes True if the first is less than or equal to the second, False otherwise (only works for integers)
 le :: Stack -> Stack
-le (IntValue n1:IntValue n2:stack) = BoolValue (n1 <= n2):stack
+le (IntValue n1:IntValue n2:stack) = BoolValue (boolToStr (n1 <= n2)):stack
 le _ = error "Run-time error"
 
 -- Pops two booleans from the stack and pushes True if both are True, False otherwise
@@ -70,8 +74,8 @@ neg _ = error "Run-time error"
 
 -- Pushes the value of the variable with the given name onto the stack
 fetch :: String -> Stack -> State -> (Stack, State)
-fetch var stack store = (value:stack, store)
-  where value = case lookup var store of
+fetch var stack state = (value:stack, state)
+  where value = case lookup var state of
                   Just value -> value
                   Nothing -> error "Run-time error"
 
@@ -96,7 +100,7 @@ branch c1 c2 (BoolValue "tt":stack) = c1
 branch c1 c2 (BoolValue "ff":stack) = c2
 branch c1 c2 stack = error $ "Run-time error with c1: " ++ show c1 ++ " and c2: " ++ show c2 ++ " and stack: " ++ stack2Str stack
 
--- Dummy instruction that returns the input stack and store
+-- Dummy instruction that returns the input stack and state
 noop :: Stack -> State -> (Stack, State)
 noop stack state = (stack, state)
 
@@ -123,6 +127,7 @@ state2Str = intercalate "," . map (\(var, value) -> var ++ "=" ++ stackValueToSt
   where
     sortByName = sortBy (comparing fst)
 
+-- Executes the first instruction of the code list with the given stack and state and returns the resulting code, stack and state
 exec :: Code -> Stack -> State -> (Code, Stack, State)
 exec ((Push n):code) stack state = (code, stack', state)
   where stack' = push n stack
@@ -151,9 +156,9 @@ exec ((Store var):code) stack state = (code, stack', state')
 exec ((Noop):code) stack state = (code, stack', state')
   where (stack', state') = noop stack state
 exec ((Branch c1 c2):code) stack state = (c, stack', state')
-  where (c, stack', state') = ((branch c1 c2 stack), (tail stack), state)
+  where (c, stack', state') = ((branch c1 c2 stack) ++ code, (tail stack), state)
 exec ((Loop c1 c2):code) stack state = (c, stack', state')
-  where (c, stack', state') = (c1 ++ [(Branch (c2 ++ [Loop c1 c2]) [Noop])], stack, state)
+  where (c, stack', state') = ((c1 ++ [(Branch (c2 ++ [Loop c1 c2]) [Noop])]) ++ code, stack, state)
 
 -- Runs the given code with the given stack and state and returns the resulting stack and state
 -- given a list of instructions (type defined as Code, i.e. type Code = [Inst]), a stack (type defined as
@@ -190,7 +195,9 @@ testAssembler code = (stack2Str stack, state2Str state)
 -- Part 2
 
 -- TODO: Define the types Aexp, Bexp, Stm and Program
-data Aexp = Num Integer | Var String | Add' Aexp Aexp | Sub' Aexp Aexp | Mult' Aexp Aexp deriving Show
+data Aexp = 
+  Num Integer | Var String | Add' Aexp Aexp | Sub' Aexp Aexp | Mult' Aexp Aexp 
+  deriving Show
 
 data Bexp = 
   Tru' | Fals' | Neg' Bexp | And' Bexp Bexp | Le' Aexp Aexp | Equi Aexp Aexp | Equb Bexp Bexp
@@ -201,6 +208,12 @@ data Stm =
   deriving Show
   
 type Program = [Stm]
+
+data Token =
+  NumToken Integer | VarToken String | AddToken | SubToken | MultToken | TruToken | FalsToken | NegToken | 
+  AndToken | LeToken | EquiToken | EqubToken | AssignToken | IfToken | ThenToken | ElseToken | WhileToken | 
+  DoToken | SemicolonToken | OpenToken | CloseToken | NoopToken
+  deriving Show
 
 compA :: Aexp -> Code
 compA (Num n) = [Push n]
@@ -224,43 +237,45 @@ compile (Assign var a:rest) = compA a ++ [Store var] ++ compile rest
 compile (If b p1 p2:rest) = compB b ++ [Branch (compile p1) (compile p2)] ++ compile rest
 compile (While b p:rest) = [Loop (compB b) (compile p)] ++ compile rest
 
-lexer :: String -> [String]
+lexer :: String -> [Token]
 lexer [] = []
 lexer input@(c:cs)
-  | "<=" `isPrefixOf` input = "<=" : lexer (drop 2 input)
-  | ":=" `isPrefixOf` input = ":=" : lexer (drop 2 input)
-  | "==" `isPrefixOf` input = "==" : lexer (drop 2 input)
-  | "while" `isPrefixOf` input = "while" : lexer (drop 5 input)
-  | "do" `isPrefixOf` input = "do" : lexer (drop 2 input)
-  | "==" `isPrefixOf` input = "==" : lexer (drop 2 input)
-  | "True" `isPrefixOf` input = "True" : lexer (drop 4 input)
-  | "False" `isPrefixOf` input = "False" : lexer (drop 5 input)
-  | "not" `isPrefixOf` input = "not" : lexer (drop 3 input)
-  | "and" `isPrefixOf` input = "and" : lexer (drop 3 input)
-  | "if" `isPrefixOf` input = "if" : lexer (drop 2 input)
-  | "then" `isPrefixOf` input = "then" : lexer (drop 4 input)
-  | "else" `isPrefixOf` input = "else" : lexer (drop 4 input)
-  | isDigit c = (takeWhile isDigit input) : lexer (dropWhile isDigit input)
-  | isLower c = (takeWhile isAlpha input) : lexer (dropWhile isAlpha input)
-  | " " `isPrefixOf` input = lexer (drop 1 input)
+  | "<=" `isPrefixOf` input = LeToken : lexer (drop 2 input)
+  | ":=" `isPrefixOf` input = AssignToken : lexer (drop 2 input)
+  | "==" `isPrefixOf` input = EquiToken : lexer (drop 2 input)
+  | "while" `isPrefixOf` input = WhileToken : lexer (drop 5 input)
+  | "do" `isPrefixOf` input = DoToken : lexer (drop 2 input)
+  | "True" `isPrefixOf` input = TruToken : lexer (drop 4 input)
+  | "False" `isPrefixOf` input = FalsToken : lexer (drop 5 input)
+  | "not" `isPrefixOf` input = NegToken : lexer (drop 3 input)
+  | "and" `isPrefixOf` input = AndToken : lexer (drop 3 input)
+  | "if" `isPrefixOf` input = IfToken : lexer (drop 2 input)
+  | "then" `isPrefixOf` input = ThenToken : lexer (drop 4 input)
+  | "else" `isPrefixOf` input = ElseToken : lexer (drop 4 input)
+  | isDigit c = (NumToken (read (takeWhile isDigit input))) : lexer (dropWhile isDigit input)
+  | isLower c = VarToken (takeWhile isAlpha input) : lexer (dropWhile isAlpha input)
+  | isSpace c = lexer cs
   | "\n" `isPrefixOf` input = lexer (drop 1 input)
-  | "=" `isPrefixOf` input = "=" : lexer (drop 1 input)
-  | "+" `isPrefixOf` input = "+" : lexer (drop 1 input)
-  | "-" `isPrefixOf` input = "-" : lexer (drop 1 input)
-  | "*" `isPrefixOf` input = "*" : lexer (drop 1 input)
-  | "(" `isPrefixOf` input = "(" : lexer (drop 1 input)
-  | ")" `isPrefixOf` input = ")" : lexer (drop 1 input)
-  | ";" `isPrefixOf` input = ";" : lexer (drop 1 input)
-  | otherwise = error $ "Cannot parse: " ++ input
+  | "=" `isPrefixOf` input = EqubToken : lexer (drop 1 input)
+  | "+" `isPrefixOf` input = AddToken : lexer (drop 1 input)
+  | "-" `isPrefixOf` input = SubToken : lexer (drop 1 input)
+  | "*" `isPrefixOf` input = MultToken : lexer (drop 1 input)
+  | "(" `isPrefixOf` input = OpenToken : lexer (drop 1 input)
+  | ")" `isPrefixOf` input = CloseToken : lexer (drop 1 input)
+  | ";" `isPrefixOf` input = SemicolonToken : lexer (drop 1 input)
+  | otherwise = error ("unexpected character: '" ++ show c ++ "'")
 
 
---parse :: String -> Program
-parse =  undefined-- TODO
+parseInt :: [Token] -> Maybe (Integer, [Token])
+parseInt = 
+
+-- parse :: String -> Program
+parse = undefined-- TODO
 
 -- To help you test your parser
 -- testParser :: String -> (String, String)
--- testParser programCode = (stack2Str stack, store2Str store)
-  -- where (_, stack, store) = run (compile (parse programCode), createEmptyStack, createEmptyStore)
+-- testParser programCode = (stack2Str stack, state2Str state)
+  -- where (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
