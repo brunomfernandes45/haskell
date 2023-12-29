@@ -204,6 +204,10 @@ data Bexp =
   Tru' | Fals' | Neg' Bexp | And' Bexp Bexp | Le' Aexp Aexp | Equi Aexp Aexp | Equb Bexp Bexp
   deriving Show
 
+data Exp = 
+  Aexp Aexp | Bexp Bexp
+  deriving Show
+
 data Stm =
   Assign String Aexp | If Bexp Program Program | While Bexp Program 
   deriving Show
@@ -267,8 +271,81 @@ lexer input@(c:cs)
   | otherwise = error ("unexpected character: '" ++ show c ++ "'")
 
 
--- parseInt :: [Token] -> Maybe (Integer, [Token])
-parseInt = undefined
+parseInt :: [Token] -> Maybe (Aexp, [Token])
+parseInt (NumToken n : restTokens) = Just (Num n, restTokens)
+parseInt tokens = Nothing
+
+parseVar :: [Token] -> Maybe (Aexp, [Token])
+parseVar (VarToken var : restTokens) = Just (Var var, restTokens)
+parseVar tokens = Nothing
+
+parseAssign :: [Token] -> Maybe (Stm, [Token])
+parseAssign (VarToken var : AssignToken : restTokens) 
+  = case parseAexp restTokens of
+    Just (aexp, SemicolonToken : restTokens') -> Just (Assign var aexp, restTokens')
+    _ -> Nothing
+parseAssign tokens = Nothing
+
+parseAtom :: [Token] -> Maybe (Aexp, [Token])
+parseAtom tokens = case parseInt tokens of
+  Just (aexp, restTokens) -> Just (aexp, restTokens)
+  _ -> case parseVar tokens of
+    Just (aexp, restTokens) -> Just (aexp, restTokens)
+    _ -> Nothing
+
+parseMult :: [Token] -> Maybe (Aexp, [Token])
+parseMult tokens 
+  = case parseAtom tokens of
+    Just (aexp1, MultToken : restTokens) -> 
+      case parseMult restTokens of
+        Just (aexp2, restTokens') -> Just (Mult' aexp1 aexp2, restTokens')
+        Nothing -> Nothing
+    result -> result
+
+parseAddOrSub :: [Token] -> Maybe (Aexp, [Token])
+parseAddOrSub tokens 
+  = case parseMult tokens of
+    Just (aexp1, AddToken : restTokens) -> 
+      case parseMult restTokens of
+        Just (aexp2, restTokens') -> Just (Add' aexp1 aexp2, restTokens')
+        Nothing -> Nothing
+    Just (aexp1, SubToken : restTokens) -> 
+      case parseMult restTokens of
+        Just (aexp2, restTokens') -> Just (Sub' aexp1 aexp2, restTokens')
+        Nothing -> Nothing
+    result -> result
+
+parseAtomOrPar :: [Token] -> Maybe (Aexp, [Token])
+parseAtomOrPar (NumToken n : restTokens) = Just (Num n, restTokens)
+parseAtomOrPar (VarToken var : restTokens) = Just (Var var, restTokens)
+parseAtomOrPar (OpenToken : restTokens) 
+  = case parseAexp restTokens of
+      Just (aexp, CloseToken : restTokens') -> Just (aexp, restTokens')
+      Just _ -> Nothing
+      Nothing -> Nothing
+parseAtomOrPar _ = Nothing
+
+parseMultOrAtomOrPar :: [Token] -> Maybe (Aexp, [Token])
+parseMultOrAtomOrPar tokens 
+  = case parseAtomOrPar tokens of
+      Just (aexp1, MultToken : restTokens) -> 
+        case parseMultOrAtomOrPar restTokens of
+          Just (aexp2, restTokens') -> Just (Mult' aexp1 aexp2, restTokens')
+          Nothing -> Nothing
+      result -> result
+
+parseAexp :: [Token] -> Maybe (Aexp, [Token])
+parseAexp tokens 
+  = case parseMultOrAtomOrPar tokens of
+      Just (aexp1, AddToken : restTokens) -> 
+        case parseMultOrAtomOrPar restTokens of
+          Just (aexp2, restTokens') -> Just (Add' aexp1 aexp2, restTokens')
+          Nothing -> Nothing
+      Just (aexp1, SubToken : restTokens) -> 
+        case parseMultOrAtomOrPar restTokens of
+          Just (aexp2, restTokens') -> Just (Sub' aexp1 aexp2, restTokens')
+          Nothing -> Nothing
+      result -> result
 
 -- parse :: String -> Program
 parse = undefined-- TODO
@@ -278,6 +355,13 @@ parse = undefined-- TODO
 -- testParser programCode = (stack2Str stack, state2Str state)
   -- where (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
 
+testCompiler :: Program -> (String, String)
+testCompiler programCode = (stack2Str stack, state2Str state)
+  where (_, stack, state) = run (compile (programCode), createEmptyStack, createEmptyState)
+
+-- testCompiler [Assign "x" (Num 5), Assign "x" (Sub' (Var "x") (Num 1))]
+-- testCompiler [If (And' (Neg' (Tru')) (Equb (Le' (Num 2) (Num 5)) (Equi (Num 3) (Num 4)))) [Assign "x" (Num 1)] [Assign "y" (Num 2)]]
+-- testCompiler [Assign "i" (Num 10), Assign "fact" (Num 1), While (Neg' (Equi (Var "i") (Num 1))) [Assign "fact" (Mult' (Var "fact") (Var "i")), Assign "i" (Sub' (Var "i") (Num 1))]]
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
 -- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
