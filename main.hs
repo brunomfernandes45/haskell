@@ -115,7 +115,8 @@ stack2Str stack = intercalate "," (map stackValueToStr stack)
 -- Converts a stack value to a string representation
 stackValueToStr :: StackValue -> String
 stackValueToStr (IntValue n) = show n
-stackValueToStr (BoolValue b) = show b
+stackValueToStr (BoolValue "tt") = show True
+stackValueToStr (BoolValue "ff") = show False
 
 -- Creates an empty state
 createEmptyState :: State
@@ -266,8 +267,8 @@ lexer input@(c:cs)
   | otherwise = error ("unexpected character: '" ++ show c ++ "'")
 
 
-parseInt :: [Token] -> Maybe (Integer, [Token])
-parseInt = 
+-- parseInt :: [Token] -> Maybe (Integer, [Token])
+parseInt = undefined
 
 -- parse :: String -> Program
 parse = undefined-- TODO
