@@ -2,18 +2,24 @@ import Data.List
 import Data.Ord (comparing)
 import Data.Char 
 
+-- Data type for instructions
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
   Branch Code Code | Loop Code Code
   deriving Show
 
+-- Type synonym for a list of instructions
 type Code = [Inst]
 
+-- Data type for stack values
 data StackValue =
   IntValue Integer | BoolValue String
   deriving Show
 
+-- Type synonym for a list of stack values
 type Stack = [StackValue]
+
+-- Type synonym for a list of tuples of strings and stack values
 type State = [(String, StackValue)]
 
 -- Pushes an integer onto the stack
@@ -43,6 +49,7 @@ tru stack = BoolValue "tt":stack
 fals :: Stack -> Stack
 fals stack = BoolValue "ff":stack
 
+-- Converts a boolean to a string representation
 boolToStr :: Bool -> String
 boolToStr True = "tt"
 boolToStr False = "ff"
@@ -195,31 +202,32 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- Part 2
 
--- TODO: Define the types Aexp, Bexp, Stm and Program
+-- Data type for arithmetic expressions
 data Aexp = 
   Num Integer | Var String | Add' Aexp Aexp | Sub' Aexp Aexp | Mult' Aexp Aexp 
   deriving Show
 
+-- Data type for boolean expressions
 data Bexp = 
   Tru' | Fals' | Neg' Bexp | And' Bexp Bexp | Le' Aexp Aexp | Equi Aexp Aexp | Equb Bexp Bexp
   deriving Show
 
-data Exp = 
-  Aexp Aexp | Bexp Bexp
-  deriving Show
-
+-- Data type for statements
 data Stm =
   Assign String Aexp | If Bexp Program Program | While Bexp Program 
   deriving Show
-  
+
+-- Type synonym for a list of statements
 type Program = [Stm]
 
+-- Data type for tokens
 data Token =
   NumToken Integer | VarToken String | AddToken | SubToken | MultToken | TruToken | FalsToken | NegToken | 
   AndToken | LeToken | EquiToken | EqubToken | AssignToken | IfToken | ThenToken | ElseToken | WhileToken | 
   DoToken | SemicolonToken | OpenToken | CloseToken | NoopToken
   deriving Show
 
+-- Compiles an arithmetic expression into a list of instructions
 compA :: Aexp -> Code
 compA (Num n) = [Push n]
 compA (Var var) = [Fetch var]
@@ -227,6 +235,7 @@ compA (Add' a1 a2) = compA a2 ++ compA a1 ++ [Add]
 compA (Sub' a1 a2) = compA a2 ++ compA a1 ++ [Sub]
 compA (Mult' a1 a2) = compA a2 ++ compA a1 ++ [Mult]
 
+-- Compiles a boolean expression into a list of instructions
 compB :: Bexp -> Code
 compB Tru' = [Tru]
 compB Fals' = [Fals]
@@ -236,12 +245,14 @@ compB (Le' a1 a2) = compA a2 ++ compA a1 ++ [Le]
 compB (Equi a1 a2) = compA a2 ++ compA a1 ++ [Equ]
 compB (Equb b1 b2) = compB b2 ++ compB b1 ++ [Equ]
 
+-- Compiles a program into a list of instructions
 compile :: Program -> Code
 compile [] = []
 compile (Assign var a:rest) = compA a ++ [Store var] ++ compile rest
 compile (If b p1 p2:rest) = compB b ++ [Branch (compile p1) (compile p2)] ++ compile rest
 compile (While b p:rest) = [Loop (compB b) (compile p)] ++ compile rest
 
+-- Lexes the given string and returns the corresponding list of tokens
 lexer :: String -> [Token]
 lexer [] = []
 lexer input@(c:cs)
@@ -270,22 +281,32 @@ lexer input@(c:cs)
   | ";" `isPrefixOf` input = SemicolonToken : lexer (drop 1 input)
   | otherwise = error ("unexpected character: '" ++ show c ++ "'")
 
-
+-- Parses an integer
 parseInt :: [Token] -> Maybe (Aexp, [Token])
 parseInt (NumToken n : restTokens) = Just (Num n, restTokens)
 parseInt tokens = Nothing
 
+
+-- Parses a variable
 parseVar :: [Token] -> Maybe (Aexp, [Token])
 parseVar (VarToken var : restTokens) = Just (Var var, restTokens)
 parseVar tokens = Nothing
 
+
+-- Parses an Assign statement
 parseAssign :: [Token] -> Maybe (Stm, [Token])
+parseAssign (VarToken var : AssignToken : TruToken : restTokens) 
+  = error "Run-time error"
+parseAssign (VarToken var : AssignToken : FalsToken : restTokens)
+  = error "Run-time error"
 parseAssign (VarToken var : AssignToken : restTokens) 
   = case parseAexp restTokens of
     Just (aexp, SemicolonToken : restTokens') -> Just (Assign var aexp, restTokens')
     _ -> Nothing
 parseAssign tokens = Nothing
 
+
+-- Parses an integer or variable
 parseAtom :: [Token] -> Maybe (Aexp, [Token])
 parseAtom tokens = case parseInt tokens of
   Just (aexp, restTokens) -> Just (aexp, restTokens)
@@ -293,6 +314,8 @@ parseAtom tokens = case parseInt tokens of
     Just (aexp, restTokens) -> Just (aexp, restTokens)
     _ -> Nothing
 
+
+-- Parses an integer, variable or Multiplication arithmetic expressions
 parseMult :: [Token] -> Maybe (Aexp, [Token])
 parseMult tokens 
   = case parseAtom tokens of
@@ -302,6 +325,8 @@ parseMult tokens
         Nothing -> Nothing
     result -> result
 
+
+-- Parses all types of arithmetic expressions except for parenthesized ones
 parseAddOrSub :: [Token] -> Maybe (Aexp, [Token])
 parseAddOrSub tokens 
   = case parseMult tokens of
@@ -315,6 +340,7 @@ parseAddOrSub tokens
         Nothing -> Nothing
     result -> result
 
+-- Parses an integer, variable or Parenthesized arithmetic expressions
 parseAtomOrPar :: [Token] -> Maybe (Aexp, [Token])
 parseAtomOrPar (NumToken n : restTokens) = Just (Num n, restTokens)
 parseAtomOrPar (VarToken var : restTokens) = Just (Var var, restTokens)
@@ -325,6 +351,7 @@ parseAtomOrPar (OpenToken : restTokens)
       Nothing -> Nothing
 parseAtomOrPar _ = Nothing
 
+-- Parses an integer, variable, Multiplication or Parenthesized arithmetic expressions
 parseMultOrAtomOrPar :: [Token] -> Maybe (Aexp, [Token])
 parseMultOrAtomOrPar tokens 
   = case parseAtomOrPar tokens of
@@ -334,6 +361,8 @@ parseMultOrAtomOrPar tokens
           Nothing -> Nothing
       result -> result
 
+
+-- Parses all types of arithmetic expressions
 parseAexp :: [Token] -> Maybe (Aexp, [Token])
 parseAexp tokens 
   = case parseMultOrAtomOrPar tokens of
@@ -347,66 +376,223 @@ parseAexp tokens
           Nothing -> Nothing
       result -> result
 
+-- Parses boolean values
 parseBool :: [Token] -> Maybe (Bexp, [Token])
 parseBool (TruToken : restTokens) = Just (Tru', restTokens)
 parseBool (FalsToken : restTokens) = Just (Fals', restTokens)
 parseBool _ = Nothing
 
+-- Parses boolean values and Le or Equi boolean expressions
+parseLeOrEqui :: [Token] -> Maybe (Bexp, [Token])
+parseLeOrEqui tokens 
+  = case parseAexp tokens of
+    Just (aexp1, LeToken : restTokens) -> 
+      case parseAexp restTokens of
+        Just (aexp2, restTokens') -> Just (Le' aexp1 aexp2, restTokens')
+        Nothing -> Nothing
+    Just (aexp1, EquiToken : restTokens) -> 
+      case parseAexp restTokens of
+        Just (aexp2, restTokens') -> Just (Equi aexp1 aexp2, restTokens')
+        Nothing -> Nothing
+    _ -> Nothing
+
+
+-- Parses boolean values, Neg, Le or Equi boolean expressions
 parseNeg :: [Token] -> Maybe (Bexp, [Token])
+parseNeg (TruToken : restTokens) = Just (Tru', restTokens)
+parseNeg (FalsToken : restTokens) = Just (Fals', restTokens)
 parseNeg (NegToken : restTokens) 
-  = case parseBoolOrPar restTokens of
-    Just (bexp, restTokens') -> Just (Neg' bexp, restTokens')
+  = case parseLeOrEqui restTokens of
+      Just (bexp, restTokens') -> Just (Neg' bexp, restTokens')
+      Nothing -> case parseBool restTokens of
+        Just (bexp, restTokens') -> Just (Neg' bexp, restTokens')
+        Nothing -> Nothing
+parseNeg tokens 
+  = case parseLeOrEqui tokens of
+    Just (bexp1, restTokens) -> Just (bexp1, restTokens)
     Nothing -> Nothing
 
-parsePar :: [Token] -> Maybe (Bexp, [Token])
-parsePar (OpenToken : restTokens) 
-  = case parseBexp restTokens of
-      Just (bexp, CloseToken : restTokens') -> Just (bexp, restTokens')
-      Just _ -> Nothing
-      Nothing -> Nothing
 
-parseBoolOrPar :: [Token] -> Maybe (Bexp, [Token])
-parseBoolOrPar = parseNeg
-
-parseBexp :: [Token] -> Maybe (Bexp, [Token])
-parseBexp tokens 
-  = case parseBoolOrPar tokens of
-    Just (bexp1, AndToken : restTokens) -> 
-      case parseBoolOrPar restTokens of
-        Just (bexp2, restTokens') -> Just (And' bexp1 bexp2, restTokens')
-        Nothing -> Nothing
+-- Parses all types of boolean expressions except for And and Parenthesized ones
+parseEqub :: [Token] -> Maybe (Bexp, [Token])
+parseEqub tokens 
+  = case parseNeg tokens of
     Just (bexp1, EqubToken : restTokens) -> 
-      case parseBexp restTokens of
+      case parseNeg restTokens of
         Just (bexp2, restTokens') -> Just (Equb bexp1 bexp2, restTokens')
         Nothing -> Nothing
     result -> result
 
+
+-- Parses all types of boolean expressions except for Parenthesized ones
+parseAnd :: [Token] -> Maybe (Bexp, [Token])
+parseAnd tokens 
+  = case parseEqub tokens of
+    Just (bexp1, AndToken : restTokens) -> 
+      case parseEqub restTokens of
+        Just (bexp2, restTokens') -> Just (And' bexp1 bexp2, restTokens')
+        Nothing -> Nothing
+    result -> result
+
+
+-- Parses boolean values and Parenthesized boolean expressions
+parseBoolOrPar :: [Token] -> Maybe (Bexp, [Token])
+parseBoolOrPar (TruToken : restTokens) = Just (Tru', restTokens)
+parseBoolOrPar (FalsToken : restTokens) = Just (Fals', restTokens)
+parseBoolOrPar (OpenToken : restTokens) 
+  = case parseBexp restTokens of
+      Just (bexp, CloseToken : restTokens') -> Just (bexp, restTokens')
+      Just _ -> Nothing
+      Nothing -> Nothing
+parseBoolOrPar _ = Nothing
+
+
+-- Parses boolean values and Le, Equi or Parenthesized boolean expressions
+parseBoolOrLeOrEquiOrPar :: [Token] -> Maybe (Bexp, [Token])
+parseBoolOrLeOrEquiOrPar tokens 
+  = case parseLeOrEqui tokens of
+    Just (bexp1, restTokens) -> Just (bexp1, restTokens)
+    Nothing -> case parseBoolOrPar tokens of
+      Just (bexp1, restTokens) -> Just (bexp1, restTokens)
+      Nothing -> Nothing
+
+-- Parses all types of boolean expressions except for And and Neg
+parseNegOrPar :: [Token] -> Maybe (Bexp, [Token])
+parseNegOrPar (NegToken : restTokens) 
+  = case parseBoolOrPar restTokens of
+      Just (bexp, restTokens') -> Just (Neg' bexp, restTokens')
+      Nothing -> Nothing
+parseNegOrPar tokens
+  = case parseBoolOrLeOrEquiOrPar tokens of
+    Just (bexp1, restTokens) -> Just (bexp1, restTokens)
+    Nothing -> Nothing
+
+-- Parses all types of boolean expressions except for And
+parseEqubOrPar :: [Token] -> Maybe (Bexp, [Token])
+parseEqubOrPar tokens 
+  = case parseNegOrPar tokens of
+    Just (bexp1, EqubToken : restTokens) -> 
+      case parseNegOrPar restTokens of
+        Just (bexp2, restTokens') -> Just (Equb bexp1 bexp2, restTokens')
+        Nothing -> Nothing
+    result -> result
+
+-- Parses all types of boolean expressions
+parseAndOrPar :: [Token] -> Maybe (Bexp, [Token])
+parseAndOrPar tokens 
+  = case parseEqubOrPar tokens of
+    Just (bexp1, AndToken : restTokens) -> 
+      case parseEqubOrPar restTokens of
+        Just (bexp2, restTokens') -> Just (And' bexp1 bexp2, restTokens')
+        Nothing -> Nothing
+    result -> result
+
+-- Parses a boolean expression
+parseBexp :: [Token] -> Maybe (Bexp, [Token])
+parseBexp tokens 
+  = case parseAndOrPar tokens of
+    Just (bexp1, restTokens) -> Just (bexp1, restTokens)
+    Nothing -> Nothing
+
+
+-- Parses an If statement
+parseIf :: [Token] -> Maybe (Stm, [Token])
+parseIf (IfToken : restTokens) 
+  = case parseBexp restTokens of
+    Just (bexp, ThenToken : restTokens') -> 
+      case parseSubProgram restTokens' [] of
+        Just (p1, ElseToken : restTokens'') -> 
+          case parseSubProgram restTokens'' [] of
+            Just (p2, restTokens''') -> Just (If bexp p1 p2, restTokens''')
+            Nothing -> Nothing
+        Just (p1, restTokens'') -> Just (If bexp p1 [], restTokens'')
+        Nothing -> Nothing
+    _ -> Nothing
+parseIf tokens = Nothing
+
+-- Parses a While statement
+parseWhile :: [Token] -> Maybe (Stm, [Token])
+parseWhile (WhileToken : restTokens) 
+  = case parseBexp restTokens of
+    Just (bexp, DoToken : restTokens') -> 
+      case parseSubProgram restTokens' [] of
+        Just (p, restTokens'') -> Just (While bexp p, restTokens'')
+        Nothing -> Nothing
+    _ -> Nothing
+parseWhile tokens = Nothing
+
+
+-- Parses the given list of tokens and returns the corresponding program
+parseSubProgram :: [Token] -> Program -> Maybe (Program, [Token])
+parseSubProgram [] _ = Nothing
+parseSubProgram (OpenToken : restTokens) program
+  = case parseSubProgram restTokens program of
+    Just (p, CloseToken : SemicolonToken : restTokens') -> Just (p, restTokens')
+    Just (p, CloseToken : restTokens') -> Just (p, restTokens')
+    Just (p, restTokens') -> parseSubProgramToClose restTokens' p
+parseSubProgram tokens program = case parseAssign tokens of
+  Just (stm, restTokens) -> Just (program ++ [stm], restTokens)
+  Nothing -> case parseIf tokens of
+    Just (stm, restTokens) -> Just (program ++ [stm], restTokens)
+    Nothing -> case parseWhile tokens of
+      Just (stm, restTokens) -> Just (program ++ [stm], restTokens)
+      Nothing -> Nothing
+
+
+-- Parses the given list of tokens until it finds a CloseToken and returns the corresponding program
+parseSubProgramToClose :: [Token] -> Program -> Maybe (Program, [Token])
+parseSubProgramToClose [] _ = Nothing
+parseSubProgramToClose (CloseToken : SemicolonToken : restTokens) program = Just (program, restTokens)
+parseSubProgramToClose (CloseToken : restTokens) program = Just (program, restTokens)
+parseSubProgramToClose tokens program = case parseAssign tokens of
+  Just (stm, restTokens) -> parseSubProgramToClose restTokens (program ++ [stm])
+  Nothing -> case parseIf tokens of
+    Just (stm, restTokens) -> parseSubProgramToClose restTokens (program ++ [stm])
+    Nothing -> case parseWhile tokens of
+      Just (stm, restTokens) -> parseSubProgramToClose restTokens (program ++ [stm])
+      Nothing -> Nothing
+
+-- Parses the given string and returns the corresponding program
 parse :: String -> Program
 parse = parseProgram . lexer
 
+-- Parses the given list of tokens and returns the corresponding program
 parseProgram :: [Token] -> Program
 parseProgram [] = []
 parseProgram tokens = case parseAssign tokens of
   Just (stm, restTokens) -> stm : parseProgram restTokens
-  Nothing -> []
+  Nothing -> case parseIf tokens of
+    Just (stm, restTokens) -> stm : parseProgram restTokens
+    Nothing -> case parseWhile tokens of
+      Just (stm, restTokens) -> stm : parseProgram restTokens
+      Nothing -> error ("unexpected error while parsing" ++ show tokens)
 
 -- To help you test your parser
 testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
   where (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
 
+-- To help you test your compiler
 testCompiler :: Program -> (String, String)
 testCompiler programCode = (stack2Str stack, state2Str state)
   where (_, stack, state) = run (compile (programCode), createEmptyStack, createEmptyState)
 
--- testCompiler [Assign "x" (Num 5), Assign "x" (Sub' (Var "x") (Num 1))]
--- testCompiler [If (And' (Neg' (Tru')) (Equb (Le' (Num 2) (Num 5)) (Equi (Num 3) (Num 4)))) [Assign "x" (Num 1)] [Assign "y" (Num 2)]]
--- testCompiler [Assign "i" (Num 10), Assign "fact" (Num 1), While (Neg' (Equi (Var "i") (Num 1))) [Assign "fact" (Mult' (Var "fact") (Var "i")), Assign "i" (Sub' (Var "i") (Num 1))]]
+
 -- Examples:
+
+-- DONE -- testCompiler [Assign "x" (Num 5), Assign "x" (Sub' (Var "x") (Num 1))]
+-- DONE -- testCompiler [If (And' (Neg' (Tru')) (Equb (Le' (Num 2) (Num 5)) (Equi (Num 3) (Num 4)))) [Assign "x" (Num 1)] [Assign "y" (Num 2)]]
+-- DONE -- testCompiler [Assign "i" (Num 10), Assign "fact" (Num 1), While (Neg' (Equi (Var "i") (Num 1))) [Assign "fact" (Mult' (Var "fact") (Var "i")), Assign "i" (Sub' (Var "i") (Num 1))]]
+
 -- DONE -- testParser "x := 5; x := x - 1;" == ("","x=4")
--- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
--- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)" == ("","x=1")
--- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
--- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
+-- DONE -- testParser "x := 0 - 2;" == ("","x=-2")
+-- DONE -- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
+-- DONE -- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;);" == ("","x=1")
+-- DONE -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
+-- DONE -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
+-- DONE -- testParser "x := 44; if x <= 43 then x := 1; else (x := 33; x := x+1;); y := x*2;" == ("","x=34,y=68")
+-- DONE -- testParser "x := 42; if x <= 43 then (x := 33; x := x+1;) else x := 1;" == ("","x=34")
+-- DONE -- testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
+-- DONE -- testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
 -- DONE -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
--- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
+-- DONE -- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
