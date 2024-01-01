@@ -502,7 +502,7 @@ parseIf (IfToken : restTokens)
     Just (bexp, ThenToken : restTokens') -> 
       case parseSubProgram restTokens' [] of
         Just (p1, ElseToken : restTokens'') -> 
-          case parseSubProgram restTokens'' [] of
+          case parseElseOrDo restTokens'' [] of
             Just (p2, restTokens''') -> Just (If bexp p1 p2, restTokens''')
             Nothing -> Nothing
         Just (p1, restTokens'') -> Just (If bexp p1 [], restTokens'')
@@ -515,7 +515,7 @@ parseWhile :: [Token] -> Maybe (Stm, [Token])
 parseWhile (WhileToken : restTokens) 
   = case parseBexp restTokens of
     Just (bexp, DoToken : restTokens') -> 
-      case parseSubProgram restTokens' [] of
+      case parseElseOrDo restTokens' [] of
         Just (p, restTokens'') -> Just (While bexp p, restTokens'')
         Nothing -> Nothing
     _ -> Nothing
@@ -527,7 +527,6 @@ parseSubProgram :: [Token] -> Program -> Maybe (Program, [Token])
 parseSubProgram [] _ = Nothing
 parseSubProgram (OpenToken : restTokens) program
   = case parseSubProgram restTokens program of
-    Just (p, CloseToken : SemicolonToken : restTokens') -> Just (p, restTokens')
     Just (p, CloseToken : restTokens') -> Just (p, restTokens')
     Just (p, restTokens') -> parseSubProgramToClose restTokens' p
 parseSubProgram tokens program = case parseAssign tokens of
@@ -542,7 +541,6 @@ parseSubProgram tokens program = case parseAssign tokens of
 -- Parses the given list of tokens until it finds a CloseToken and returns the corresponding program
 parseSubProgramToClose :: [Token] -> Program -> Maybe (Program, [Token])
 parseSubProgramToClose [] _ = Nothing
-parseSubProgramToClose (CloseToken : SemicolonToken : restTokens) program = Just (program, restTokens)
 parseSubProgramToClose (CloseToken : restTokens) program = Just (program, restTokens)
 parseSubProgramToClose tokens program = case parseAssign tokens of
   Just (stm, restTokens) -> parseSubProgramToClose restTokens (program ++ [stm])
@@ -551,6 +549,35 @@ parseSubProgramToClose tokens program = case parseAssign tokens of
     Nothing -> case parseWhile tokens of
       Just (stm, restTokens) -> parseSubProgramToClose restTokens (program ++ [stm])
       Nothing -> Nothing
+
+-- Parses the given list of tokens and returns the corresponding program (used for Else and Do)
+parseElseOrDo :: [Token] -> Program -> Maybe (Program, [Token])
+parseElseOrDo [] _ = Nothing
+parseElseOrDo (OpenToken : restTokens) program
+  = case parseSubProgram restTokens program of
+    Just (p, CloseToken : SemicolonToken : restTokens') -> Just (p, restTokens')
+    Just (p, restTokens') -> parseElseOrDoToClose restTokens' p
+parseElseOrDo tokens program = case parseAssign tokens of
+  Just (stm, restTokens) -> Just (program ++ [stm], restTokens)
+  Nothing -> case parseIf tokens of
+    Just (stm, restTokens) -> Just (program ++ [stm], restTokens)
+    Nothing -> case parseWhile tokens of
+      Just (stm, restTokens) -> Just (program ++ [stm], restTokens)
+      Nothing -> Nothing
+
+
+-- Parses the given list of tokens until it finds a CloseToken and returns the corresponding program (used for Else and Do)
+parseElseOrDoToClose :: [Token] -> Program -> Maybe (Program, [Token])
+parseElseOrDoToClose [] _ = Nothing
+parseElseOrDoToClose (CloseToken : SemicolonToken : restTokens) program = Just (program, restTokens)
+parseElseOrDoToClose tokens program = case parseAssign tokens of
+  Just (stm, restTokens) -> parseElseOrDoToClose restTokens (program ++ [stm])
+  Nothing -> case parseIf tokens of
+    Just (stm, restTokens) -> parseElseOrDoToClose restTokens (program ++ [stm])
+    Nothing -> case parseWhile tokens of
+      Just (stm, restTokens) -> parseElseOrDoToClose restTokens (program ++ [stm])
+      Nothing -> Nothing
+
 
 -- Parses the given string and returns the corresponding program
 parse :: String -> Program
